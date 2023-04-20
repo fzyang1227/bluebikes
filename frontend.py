@@ -11,12 +11,6 @@ import requests
 
 load_dotenv()
 
-st.write(
-    os.environ["NEO4J_URI"] == st.secrets["NEO4J_URI"],
-    os.environ["NEO4J_USER"] == st.secrets["NEO4J_USER"],
-    os.environ["NEO4J_PASS"] == st.secrets["NEO4J_PASS"]
-)
-
 # build mappings
 test = pd.read_csv('data/current_bluebikes_stations.csv', header=1)
 station_map = dict(zip(test['Name'], test['Number']))
@@ -48,13 +42,13 @@ col1, col2 = st.columns(2)
 
 with col1:
 
-    start_station_option = st.selectbox("Which Bluebike station are you starting from?", ["I know what time I will reach"].__add__(stations))
+    start_station_option = st.selectbox("Which Bluebike station are you starting from?", ["None"].__add__(stations))
 
     end_station_option = st.selectbox("Which Bluebike station does your destination end at?", stations)
 
 with col2:
 
-    start_station_not_selected = (start_station_option == "I know what time I will reach")
+    start_station_not_selected = (start_station_option == "None")
 
     start_time_option = st.time_input("Approximately what time will you start the trip?", dt.datetime.now().time(), disabled=start_station_not_selected)
 
@@ -96,4 +90,5 @@ if st.button('YES!!'):
             ans = "There might be some docks available"
         else:
             ans = "There will be docks available"
-        data_load_state_2.text(ans)
+        ans = f'{ans} at {end_time_option.strftime("%H:%M")}'
+    data_load_state_2.text(ans)
