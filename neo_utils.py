@@ -80,17 +80,39 @@ def to_from_station(conn, name):
     parameters = {"name": name}
     return [prop.data() for prop in conn.query(query, parameters)]
 
-def count_trips(conn, name):
+def get_popularity(conn, name):
+    ''' get the popularity of a station
+        return a float value
+    '''
+    query1 = """
+        MATCH (n:Station {name: $name})
+        MATCH (n)-[rout]->()
+        RETURN sum(rout.total) AS total
+        UNION ALL
+        MATCH (n:Station {name: $name})
+        MATCH ()-[rin]->(n)
+        RETURN sum(rin.total) AS total
+    """
+    parameters = {"name": name}
+    node = conn.query(query1, parameters)[0].data()['total']
+    
+    query2 = """
+        MATCH ()-[tp]->()
+        RETURN sum(tp.total) AS all_trips
+    """
+    total_trips = conn.query(query2)[0].data()['all_trips']
+    return node/total_trips
+    
+
+def count_all_trips(conn):
     ''' count the number of trips inbound and outbound from a station
         return a dictionary of counts
     '''
     query = """
-        MATCH (n:Station {name: $name})
-        MATCH ()-[rin]->(n)-[rout]->()
-        RETURN sum(rin.total) AS incoming, sum(rout.total) AS outgoing
+        MATCH ()-[tp]->()
+        RETURN sum(tp.total) AS all_trips
     """
-    parameters = {"name": name}
-    return conn.query(query, parameters)[0].data()
+    return conn.query(query)[0].data()
 
 def get_trip(conn, station1, station2):
     ''' get a relationship between two stations 
@@ -103,3 +125,12 @@ def get_trip(conn, station1, station2):
     parameters = {"sid": station1, "eid": station2}
     return conn.query(query, parameters)[0].data()['details']
     
+def get_all_stations(conn):
+    ''' get all stations in the database
+        returns a list of station names
+    '''
+    query = """
+        MATCH (a:Station)
+        RETURN a.name AS name
+    """
+    return [station['name'] for station in conn.query(query)]

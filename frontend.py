@@ -3,29 +3,56 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 import time as t
+from neo_utils import Neo4jConnection, get_all_stations, get_station, get_popularity, get_trip
+from joblib import load
+from dotenv import load_dotenv
+import os
+import requests
+
+load_dotenv()
+
+st.write(
+    os.environ["NEO4J_URI"] == st.secrets["NEO4J_URI"],
+    os.environ["NEO4J_USER"] == st.secrets["NEO4J_USER"],
+    os.environ["NEO4J_PASS"] == st.secrets["NEO4J_PASS"]
+)
+
+# build mappings
+test = pd.read_csv('data/current_bluebikes_stations.csv', header=1)
+station_map = dict(zip(test['Name'], test['Number']))
+short_map = {dct['short_name']: dct['station_id'] for dct in requests.get("https://gbfs.bluebikes.com/gbfs/en/station_information.json").json()['data']['stations']}
+
+# get the environment variables
+URI = os.getenv('NEO4J_URI')
+USER = os.getenv('NEO4J_USER')
+PASS = os.getenv('NEO4J_PASS')
+
+# load in the model
+clf2 = load('data/clf.joblib')
+
+# start the connection to neo4j
+neo = Neo4jConnection(URI, USER, PASS)
+
 st.set_page_config(layout="centered")
 
 st.title('Bluebike Dock Predictor')
 
 data_load_state = st.text('Please wait a second')
 
-stations = pd.read_csv('data/boston_current_bluebike_stations.csv')
+stations = get_all_stations(neo)
 
 # Download ml model
 
 data_load_state.text('Lets begin!')
-
 days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
 day_option = st.selectbox("Which Day is the trip taking place?", days)
-
 col1, col2 = st.columns(2)
 
 with col1:
 
-    start_station_option = st.selectbox("Which Bluebike station are you starting from?", ["I know what time I will reach"].__add__(stations['Name'].to_list()))
+    start_station_option = st.selectbox("Which Bluebike station are you starting from?", ["I know what time I will reach"].__add__(stations))
 
-    end_station_option = st.selectbox("Which Bluebike station does your destination end at?", stations['Name'])
+    end_station_option = st.selectbox("Which Bluebike station does your destination end at?", stations)
 
 with col2:
 
@@ -44,13 +71,31 @@ else:
 if st.button('YES!!'):
     data_load_state_2 = st.text('Give us a second while we compute')
     day = days.index(day_option)
-    # compute the result
-    t.sleep(3)
-    result = 1
-    if result == 0:
-        ans = "There would be no available docks"
-    elif result == 1:
-        ans = "There might be some docks available"
+    
+    #build feature vector
+    pop = get_popularity(neo, end_station_option)
+    docks = get_station(neo, end_station_option)['docks']
+    dock_id = short_map.get(station_map[end_station_option], 0)
+    
+    if not start_station_not_selected:
+        try:
+            ant_time = get_trip(neo, start_station_option, end_station_option)['anticipated_time']
+        except:
+            ant_time = 900
+        end_time_option = dt.datetime.combine(dt.date(2023, 1, 1), start_time_option) + dt.timedelta(seconds=ant_time)
+    
+    if dock_id == 0:
+        ans = "Station is unavailable"
     else:
-        ans = "There will be docks available"
-    data_load_state_2.text(ans)
+        # predict the model
+        cur = [sta for sta in requests.get("https://gbfs.bluebikes.com/gbfs/en/station_information.json").json()['data']['stations'] if sta['station_id'] == dock_id][0]['capacity']
+        result = clf2.predict([[pop, docks, end_time_option.hour, day, cur]])[0]
+    
+        # compute the result
+        if result == 0:
+            ans = "There would be no available docks"
+        elif result == 1:
+            ans = "There might be some docks available"
+        else:
+            ans = "There will be docks available"
+        data_load_state_2.text(ans)
