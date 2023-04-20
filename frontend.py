@@ -33,8 +33,6 @@ clf2 = load('data/clf.joblib')
 # start the connection to neo4j
 neo = Neo4jConnection(URI, USER, PASS)
 
-st.set_page_config(layout="centered")
-
 st.title('Bluebike Dock Predictor')
 
 data_load_state = st.text('Please wait a second')
