@@ -6,3 +6,4 @@ by Aditya Saha, Ayushi Shirke, Felix Yang, Justin Salim, Lucas Jang
 ### Tools
 - Neo4j
 - Python
+- Streamlit
